@@ -1,0 +1,50 @@
+{
+  "_comment": "REAL measured baseline from a physical Dell Z9100-ON, read over console from Dell OS9 9.14(2.24) BEFORE the SONiC install. This is ground truth for calibrating the modeled energy/thermal curves in app/collector/fabric_exporter.py, so the model can be checked against real hardware.",
+  "captured": "2026-08-19T17:45-07:00",
+  "source": "Dell OS9 console: show inventory / show environment / show system brief",
+  "platform": {
+    "system_type": "Z9100-ON",
+    "part_number": "0T5W4N",
+    "rev": "A03",
+    "service_tag": "SERIAL-B",
+    "express_service_code": "EXPRESS-CODE-B",
+    "piece_part_id": "MX-0T5W4N-CEM00-XXX-XXXX",
+    "stack_mac": "00:00:5e:00:53:01",
+    "os9_version": "9.14(2.24)",
+    "rtos_version": "2.0",
+    "cpu": "Intel Rangeley, 4 cores",
+    "ram_bytes": 3203260416,
+    "boot_flash_gb": 16,
+    "ports": "32x100GbE + 2x10GbE"
+  },
+  "idle_state": {
+    "_comment": "No traffic, no optics installed, switch idle ~40min after boot",
+    "psu": [
+      {"bay": 1, "type": "AC", "status": "up", "power_w": 64, "avg_power_w": 64, "fan_rpm": 5760},
+      {"bay": 2, "type": "AC", "status": "up", "power_w": 79, "avg_power_w": 79, "fan_rpm": 5776}
+    ],
+    "total_psu_power_w": 143,
+    "fan_trays": [
+      {"bay": 1, "fan1_rpm": 6281, "fan2_rpm": 6261},
+      {"bay": 2, "fan1_rpm": 6105, "fan2_rpm": 6331},
+      {"bay": 3, "fan1_rpm": 6192, "fan2_rpm": 6383},
+      {"bay": 4, "fan1_rpm": 6115, "fan2_rpm": 6271},
+      {"bay": 5, "fan1_rpm": 6163, "fan2_rpm": 6456}
+    ],
+    "unit_temp_c": 26,
+    "thermal_sensors_c": {
+      "Bcm_Int": 55,
+      "CpuOnBoard": 26,
+      "Bcm56960": 37,
+      "SysInt0": 28,
+      "SysInt1": 24,
+      "Cpu_Int": 26
+    }
+  },
+  "model_calibration_notes": [
+    "IDLE POWER = 143 W measured. Before 2026-08 the exporter's switch model used 180 + intensity*220 W, so its idle floor (180 W) overstated real idle by ~26%. It now uses 145 + intensity*255 W.",
+    "Bcm56960 is the Tomahawk-1 ASIC die sensor and reads 37 C at idle; Bcm_Int reads 55 C. The exporter's ASIC_WARN=62 / ASIC_CRIT=72 thresholds are therefore plausible but should be re-baselined against whichever sensor SONiC exposes.",
+    "Fans idle at ~6100-6460 RPM across 5 trays. The exporter models 6000 + max(0, asic-45)*350, which matches the idle floor well.",
+    "These are OS9 readings. After the SONiC install, re-read via PMON/STATE_DB and diff - any delta is a NOS reporting difference, not a hardware change."
+  ]
+}

@@ -1,0 +1,100 @@
+name: Bug report
+description: Something doesn't work the way the docs say it should.
+title: "Bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Issues are public, so please leave out passwords, API keys,
+        tokens, IP addresses and hostnames.
+
+        **Found a security problem?** Don't use this form. Report it privately from the repository's
+        **Security** tab (**Report a vulnerability**), as SECURITY.md explains.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact error message if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands you ran and what you clicked, in order.
+      placeholder: |
+        1. ./run.sh virtual 2 2 1
+        2. Opened http://localhost:9300
+        3. Pressed ...
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which part were you using?
+      options:
+        - ./run.sh virtual (the full virtual lab)
+        - ./run.sh preview (the map only, no switches)
+        - Real switches (real-hardware/)
+        - Something else (say below)
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux (x86_64)
+        - macOS, Apple silicon
+        - macOS, Intel
+        - Windows with WSL2
+        - A cloud VM
+        - Other (say below)
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Your OS version, and the Python version from `python3 --version`.
+      placeholder: "Ubuntu 24.04, Python 3.12.3"
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The output of `git rev-parse --short HEAD`.
+  - type: input
+    id: size
+    attributes:
+      label: Fabric size
+      description: Spines, leaves and hosts per leaf, if you set them. The default is 2 2 1.
+      placeholder: "2 2 1"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        The terminal output of run.sh, and anything relevant from `.run/logs/` (dashboard.log, collector.log).
+        Remove tokens, keys and addresses before you paste. In token mode, dashboard.log can contain the token.
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, settings you changed in `.env` (without secrets), or what you've already tried.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and didn't find this one.
+          required: true
+        - label: I removed passwords, keys, tokens, IP addresses and hostnames from everything above.
+          required: true

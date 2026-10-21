@@ -1,0 +1,137 @@
+{
+  "_comment": "LIVE telemetry captured from community SONiC 202505 running on a physical Dell Z9100-ON (service tag SERIAL-B), at idle, via serial console. Companion to z9100-os9-baseline.json (same box under Dell OS9). Captured 2026-08-20.",
+  "source": "physical Dell Z9100-ON, community SONiC 202505.1196025-ff3c0c9f6, Debian 12",
+  "platform": "x86_64-dell_z9100_c2538-r0",
+  "hwsku": "Force10-Z9100-C32",
+  "asic": "broadcom (Tomahawk BCM56960)",
+  "captured": "2026-08-20",
+  "state": "idle (no traffic, no optics installed)",
+  "read_via": "docker exec pmon sensors  (SMF_Z9100_ON management FPGA)",
+  "power_watts": {
+    "psu1_input": 66.2,
+    "psu2_input": 80.5,
+    "total_input": 146.7,
+    "psu1_output": 55.6,
+    "psu2_output": 70.1,
+    "total_output": 125.7,
+    "_note": "Total input 146.7 W corroborates OS9 baseline 143 W idle and the exporter model floor of 145 W."
+  },
+  "psu_input_voltage_v": {
+    "psu1": 120.62,
+    "psu2": 120.5
+  },
+  "temperature_c": {
+    "bcm_switch_u38": 37.7,
+    "_bcm_u38_note": "Tomahawk ASIC on-board sensor; matches OS9-measured die 37 C",
+    "bcm_switch_u44": 36.1,
+    "front_bcm_u4": 30.8,
+    "front_bcm_u2": 31.5,
+    "cpu_onboard_u2900": 29.6,
+    "rear_u2900": 27.5,
+    "psu1_temp": 38.0,
+    "psu2_temp": 36.0,
+    "cpu_cores": [
+      26.0,
+      26.0,
+      27.0,
+      26.0
+    ]
+  },
+  "fans_rpm": {
+    "tray1": [
+      7349,
+      7547
+    ],
+    "tray2": [
+      7363,
+      7591
+    ],
+    "tray3": [
+      7254,
+      7489
+    ],
+    "tray4": [
+      7254,
+      7447
+    ],
+    "tray5": [
+      7295,
+      7518
+    ],
+    "psu1_fan": 7216,
+    "psu2_fan": 7232,
+    "_note": "5 fan trays x 2 fans + 2 PSU fans. Higher than OS9 baseline (~6100-6460 RPM) \u2014 SONiC default fan policy runs them faster at idle."
+  },
+  "FINDING_1_thermal_gap": {
+    "claim": "Thermal telemetry is REAL over SSH/sensors but ABSENT from gNMI (STATE_DB) by default.",
+    "root_cause": "/usr/share/sonic/device/x86_64-dell_z9100_c2538-r0/pmon_daemon_control.json ships with {\"skip_ledd\": true, \"skip_thermalctld\": true}",
+    "consequence": "thermalctld does not run -> STATE_DB TEMPERATURE_INFO is empty -> 'show platform temperature' returns 'Thermal Not detected' -> nothing to subscribe to over gNMI, even though the FPGA reports 37.7 C on the Tomahawk.",
+    "fix": "set skip_thermalctld:false in pmon_daemon_control.json, restart pmon; thermalctld then populates TEMPERATURE_INFO and a gNMI Get returns it.",
+    "significance": "The gap on the gNMI path is a one-line platform config decision, not a hardware or protocol limit. Shown on real hardware.",
+    "VERIFIED_after_fix": {
+      "action": "set skip_thermalctld:false, systemctl restart pmon (backup pmon_daemon_control.json.orig kept on box)",
+      "result_thermalctld": "RUNNING",
+      "result_state_db": "TEMPERATURE_INFO|* keys now present (ASIC On-board Rear, CPU On-board, System Front Left/Right, CPU Core 0-3)",
+      "show_platform_temperature": {
+        "ASIC On-board Rear": 36.1,
+        "CPU On-board": 29.7,
+        "System Front Left": 30.8,
+        "System Front Right": 31.2,
+        "CPU Core 0": 25,
+        "CPU Core 1": 25,
+        "CPU Core 2": 27,
+        "CPU Core 3": 26,
+        "_timestamped": "20260820 09:54:00 \u2014 live, now readable over gNMI via sonic-gnmi (STATE_DB)"
+      },
+      "show_platform_psustatus_now_works": {
+        "PSU1": {
+          "model": "0R17R1",
+          "V": 12.21,
+          "A": 4.57,
+          "W": 55.8,
+          "status": "OK",
+          "led": "green"
+        },
+        "PSU2": {
+          "model": "0R17R1",
+          "V": 12.19,
+          "A": 5.75,
+          "W": 70.1,
+          "status": "OK",
+          "led": "green"
+        }
+      }
+    }
+  },
+  "gNMI_proof_over_the_wire": {
+    "_comment": "Pulled from the command host to the physical switch (<switch-ip>:8080) via pygnmi, 2026-08-20. Community telemetry runs --noTLS --allow_no_client_auth, so no certs needed. Reproduce: real-hardware/gnmi-probe-hw.py",
+    "server": "/usr/sbin/telemetry --noTLS --port 8080 --allow_no_client_auth (host netns)",
+    "capabilities": "10 OpenConfig models",
+    "thermals_get": {
+      "target": "STATE_DB",
+      "path": "TEMPERATURE_INFO",
+      "ASIC On-board Rear_C": 36.1,
+      "note": "present ONLY after enabling thermalctld"
+    },
+    "power_get": {
+      "target": "STATE_DB",
+      "path": "PSU_INFO",
+      "PSU1_W": 55.6,
+      "PSU2_W": 69.8,
+      "PSU1_V": 12.21,
+      "PSU2_V": 12.19
+    },
+    "streaming_subscribe": {
+      "path": "TEMPERATURE_INFO",
+      "mode": "sample @2s",
+      "samples": [
+        36.0,
+        36.0,
+        36.0
+      ],
+      "gnmi_timestamps_2s_apart": true,
+      "note": "A single pygnmi run of real-hardware/gnmi-probe-hw.py on 2026-08-20 (Subscribe, mode stream, sample @2s). Seen once from the probe and not repeated, so Subscribe is not treated as proven on this hardware."
+    },
+    "pfc_ecn": "COUNTERS_DB is the same gNMI target; PFC/ECN counters populate once ASIC ports carry traffic (needs the 100G link to switch #2)."
+  }
+}

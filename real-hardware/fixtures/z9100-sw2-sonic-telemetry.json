@@ -1,0 +1,28 @@
+{
+  "_comment": "LIVE telemetry from community SONiC 202505 on physical Dell Z9100-ON switch #2 (service tag SERIAL-A), idle, captured 2026-08-20 via serial + gNMI from the Mac. Companion to z9100-sonic-telemetry.json (switch #1, SERIAL-B).",
+  "service_tag": "SERIAL-A",
+  "stack_mac": "00:00:5e:00:53:02",
+  "image": "202505.1196025-ff3c0c9f6",
+  "platform": "x86_64-dell_z9100_c2538-r0",
+  "hwsku": "Force10-Z9100-C32",
+  "captured": "2026-08-20",
+  "state": "idle, no optics",
+  "install_notes": "Identical procedure to switch #1: Esc-interrupt Dell autoboot -> grub> -> boot ONIE 4.1.28 kernel with boot_reason=rescue -> sgdisk delete Dell partitions 3-12 -> onie-nos-install -> config reload -y -f -> enable thermalctld. Serial gotcha: grub line editor drops chars at 115200, must send commands char-by-char.",
+  "power_watts": { "psu1_output": 60.1, "psu2_output": 71.1, "total_output": 131.2,
+    "_note": "show platform psustatus; OS9 baseline for this box was 70+82=152 W total." },
+  "temperature_c": {
+    "asic_on_board_rear": 34.2, "_asic_note": "Tomahawk; a touch cooler than switch #1 (36.1 C)",
+    "cpu_on_board": 29.1, "system_front_left": 30.1, "system_front_right": 30.6,
+    "cpu_cores": [22, 22, 25, 24]
+  },
+  "gNMI_proof": {
+    "endpoint": "<switch-ip>:8080 (--noTLS --allow_no_client_auth)",
+    "capabilities": "10 OpenConfig models",
+    "thermals_get": {"ASIC On-board Rear_C": 34.3},
+    "power_get": {"PSU1_W": 59.9, "PSU2_W": 70.5},
+    "streaming_subscribe": {"samples_C": [34.3, 34.3, 34.3], "gnmi_ts_2s_apart": true,
+      "note": "A single pygnmi run of real-hardware/gnmi-probe-hw.py on 2026-08-20. Seen once from the probe and not repeated, so Subscribe is not treated as proven on this hardware."},
+    "reproduce": "real-hardware/gnmi-probe-hw.py <switch-ip> 8080"
+  },
+  "FINDING_1": "Same as switch #1: pmon_daemon_control.json shipped skip_thermalctld:true; flipped to false + restarted pmon to expose thermals over gNMI. Backup saved as .orig on the box."
+}

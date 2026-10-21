@@ -1,0 +1,105 @@
+# CI for energy-lab-for-sonic: quick checks that need no switches, Docker or secrets.
+# Runs on every pull request and on every push to main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token. Pull requests from forks get no secrets (this workflow uses none).
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Cancel superseded runs on pull requests only, so every commit on main gets a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash   # bash --noprofile --norc -eo pipefail
+
+jobs:
+  checks:
+    name: checks (Python ${{ matrix.python }})
+    # Pinned: Python 3.9 has no build for ubuntu-26.04, and ubuntu-latest will move.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 = the Python that ships with macOS; 3.12 = a current Linux Python.
+        python: ["3.9", "3.12"]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install packages into .venv
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -q --disable-pip-version-check \
+            -r requirements.txt pytest==8.4.2 shellcheck-py==0.11.0.1
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Python syntax check (every tracked .py)
+        run: |
+          git ls-files -z '*.py' | xargs -0 python -W error -m py_compile
+          echo "compiled $(git ls-files '*.py' | wc -l | tr -d ' ') Python files"
+
+      - name: Shell syntax check (every tracked .sh)
+        run: |
+          git ls-files -z '*.sh' | xargs -0 -n1 bash -n
+          echo "checked $(git ls-files '*.sh' | wc -l | tr -d ' ') shell scripts"
+
+      - name: ShellCheck run.sh (errors only)
+        run: |
+          shellcheck --version | sed -n 2p
+          shellcheck --severity=error run.sh
+
+      # Not blocking yet: run.sh has 1 warning (SC2010) and 4 notes today.
+      # Remove continue-on-error once they are fixed.
+      - name: ShellCheck run.sh (all levels, advisory)
+        continue-on-error: true
+        run: shellcheck run.sh
+
+      - name: Unit tests
+        run: python -m pytest tools/ -q -rs
+
+      - name: Smoke test (preview, 2 spines x 2 leaves x 1 host, no switches)
+        run: |
+          ./run.sh preview 2 2 1
+          python virtual-fabric/fabgen.py --validate build
+          for f in fabric.json lab.clab.yaml configure-fabric.sh prometheus.yml; do
+            test -s "build/$f" || { echo "missing build/$f"; exit 1; }
+          done
+          bash -n build/configure-fabric.sh
+          python - <<'EOF'
+          import json
+          f = json.load(open("build/fabric.json"))
+          kinds = [n["kind"] for n in f["nodes"]]
+          assert f["params"] == {"spines": 2, "leaves": 2, "hosts_per_leaf": 1}, f["params"]
+          assert (kinds.count("spine"), kinds.count("leaf"), kinds.count("host")) == (2, 2, 2), kinds
+          assert len(f["links"]) == 6, len(f["links"])
+          print("fabric.json: 2 spines, 2 leaves, 2 hosts, 6 links")
+          EOF
+          for p in / /healthz /api/topology /api/scenarios /api/features /api/fabric/limits; do
+            curl -fsS -m 10 -o /dev/null -w "%{http_code} $p\n" "http://127.0.0.1:9300$p"
+          done
+          curl -fsS -m 10 http://127.0.0.1:9300/api/topology \
+            | python -c "import json, sys; json.load(sys.stdin); print('/api/topology returned valid JSON')"
+
+      - name: Show the Command Center log
+        if: failure()
+        run: cat .run/logs/dashboard.log || true
+
+      - name: Stop the preview
+        if: always()
+        run: ./run.sh down

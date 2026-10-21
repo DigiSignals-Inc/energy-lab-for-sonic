@@ -1,0 +1,3 @@
+# Keep Unix line endings everywhere, even when the repo is cloned on Windows.
+# The scripts run inside Linux, WSL2 or a Linux VM, and Windows line endings break them.
+* text=auto eol=lf

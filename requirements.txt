@@ -1,0 +1,4 @@
+# Python packages for the collector (the Command Center uses only the standard library).
+# run.sh installs these into .venv; the dashboard alone (./run.sh preview) needs none.
+prometheus-client==0.21.1
+pygnmi==0.8.15

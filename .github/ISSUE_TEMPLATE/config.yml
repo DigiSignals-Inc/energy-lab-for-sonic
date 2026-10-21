@@ -1,0 +1,10 @@
+# Blank issues stay on so people can ask questions (add the "question" label).
+# There is no Discussions tab yet. If it is turned on, add a link to it here.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/DigiSignals-Inc/energy-lab-for-sonic/security/advisories/new
+    about: Please don't open a public issue for security problems. See SECURITY.md.
+  - name: Questions about SONiC itself
+    url: https://github.com/sonic-net/SONiC
+    about: For SONiC questions and bugs that aren't about this lab, use the SONiC project.

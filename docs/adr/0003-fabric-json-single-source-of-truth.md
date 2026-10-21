@@ -1,0 +1,41 @@
+# ADR-0003: fabric.json is the single source of truth
+
+- **Status:** Accepted
+- **Date:** 2026-10-01
+
+## Context
+Four parts of the lab describe the same network, in three languages:
+- the containerlab topology (YAML), which names the nodes and wires their ports;
+- the configure script (bash), which sets interface addresses, ASNs, BGP neighbors and host routes;
+- the collector (Python), which needs the switch list, each switch's ports and a way to reach each switch;
+- the Command Center (Python), which draws the map, sends traffic between hosts and accepts switch ids in requests.
+
+The size of the fabric is a parameter: `./run.sh virtual [SPINES LEAVES HOSTS]`, default `2 2 1`, up to 8 spines, 16 leaves and 4 hosts per leaf. Those three numbers decide which nodes, ports, addresses and ASNs exist. `./run.sh preview` must also draw the map with no switches running, so the topology has to exist before any switch boots.
+
+## Decision
+[virtual-fabric/fabgen.py](../../virtual-fabric/fabgen.py) builds the whole fabric as one dict from the three numbers and writes it to `build/`, together with every file generated from it:
+- `fabric.json`: nodes, links, addresses, ASNs, an `exec` block (`mode`, `container_prefix`) that says how to reach the nodes, and a `switch_image` block that names the SONiC switch image (added 2026-10-21, ADR-0011). `docker` runs `docker exec`; `limactl` reaches containers inside a Lima VM.
+- `<name>.clab.yaml`: the containerlab topology, with the switch image from `switch_image` (by default `docker-sonic-vs:202605`, which run.sh downloads from SONiC's build pipeline).
+- `configure-fabric.sh`: links up, bgpd started, addresses, eBGP with ECMP, and host routes. The fabric data is written into the script itself, as bash arrays and one command per switch or host, so it needs no jq.
+- `prometheus.yml`: the scrape config for the collector.
+
+The conventions live only in fabgen.py: spine i has ASN 65000+i and leaf j has ASN 65100+j; containerlab `eth<k>` is SONiC `Ethernet<(k-1)*4>`; fabric links are /31s taken in order from 10.0.0.0/16, with the even address on the spine and the odd one on the leaf; leaf j's hosts use 10.10.j.0/24, with the gateway at .1 on the leaf and hosts from .10. After writing the files, fabgen checks them. It checks node counts, unique ASNs and addresses, the /31 pairs, the containerlab file's node names and link count against `fabric.json`, and `bash -n` on the script, and it exits non-zero if any check fails. `python3 virtual-fabric/fabgen.py --validate build` runs the same checks on an existing build.
+
+The collector ([fabric_exporter.py](../../app/collector/fabric_exporter.py)) and the Command Center ([app.py](../../app/app.py)) read the file named by `FABRIC_JSON`, and [run.sh](../../run.sh) points both at `build/fabric.json`. Neither has its own node list. Both reload the file when its modification time changes, and they keep the last good copy if the new one can't be read. The Command Center checks request inputs against the file: `/api/switch/<id>` returns 404 unless the id is a switch in `fabric.json`.
+
+To change the fabric, we generate it again. `./run.sh virtual S L H` removes the old lab and builds the new one. The Command Center's `POST /api/fabric/apply` runs [rebuild-fabric.sh](../../virtual-fabric/rebuild-fabric.sh), which generates into `build/.staging`, copies the new topology, configure script and Prometheus config into `build/`, redeploys and configures. Only then does it move the new `fabric.json` into `build/`. The dashboard page has no button for this.
+
+For real switches, the collector and the Command Center have a third mode, `ssh`, which reads a hand-written `fabric.json` with a `mgmt_ip` for each node. fabgen writes only `docker` and `limactl`.
+
+## Alternatives considered
+- **Hard-code the topology in each component:** every change of size or address plan would need matching edits in the YAML, the bash, the collector and the Command Center, and nothing would catch a mismatch.
+- **Discover the topology from the running switches (for example with LLDP):** containerlab needs the topology before the switches can boot, and `./run.sh preview` has no switches at all. Discovery also can't report host addresses that we haven't assigned yet.
+
+## Consequences
+- To change a convention, we change fabgen.py, and every part picks it up from the next build. A new node field also needs code in each part that uses it.
+- The files from one fabgen run come from one dict, so they agree unless fabgen itself has a bug. fabgen's checks catch many generator bugs before anything deploys: wrong counts, duplicate ASNs or addresses, broken /31 pairs, and a script that isn't valid bash. They don't compare the YAML's port wiring or the script's BGP commands with `fabric.json`.
+- `build/` holds output only and is in `.gitignore`. The next run overwrites any hand edits there, and the YAML, the script and the Prometheus config say "GENERATED by fabgen.py". Change fabgen.py or the run.sh arguments instead.
+- While `/api/fabric/apply` runs, and for good if it fails partway, `build/` holds the new topology and script next to the old `fabric.json`. Run `./run.sh virtual S L H` to get a consistent build again.
+- Any change of size redeploys every switch: both run.sh and rebuild-fabric.sh destroy the old lab first.
+- A few values are still copied by hand: app.py repeats fabgen's size limits (`FAB_MIN`, `FAB_MAX`), its modeled hardware catalog (`HARDWARE`) and the default models. A change to any of them must be made in both places.
+- A hand-written `ssh` fabric gets no generator checks: `--validate` accepts only `docker` and `limactl`, and the Command Center refuses `/api/fabric/apply` in `ssh` mode. Connecting real switches this way is not finished yet.

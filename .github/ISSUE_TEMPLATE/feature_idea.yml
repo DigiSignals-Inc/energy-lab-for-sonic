@@ -1,0 +1,63 @@
+name: Feature or idea
+description: Something you'd like the lab to do, or do differently.
+title: "Idea: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. For anything big, it helps to agree on the approach here before
+        anyone writes code. If the idea needs real switches, you can also ask us to run a test
+        on our bench with the "Run my test on your real switches" form.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: What were you trying to do, and what got in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What should the lab do? A sketch, an example or a link is welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the lab?
+      multiple: true
+      options:
+        - Command Center (dashboard)
+        - AI assistant
+        - Collector and metrics (Prometheus)
+        - Scenarios and traffic
+        - Fabric generator (virtual-fabric/)
+        - Setup (run.sh, platforms)
+        - Real hardware (real-hardware/)
+        - Docs
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: If it shows a new value, where does the number come from?
+      description: |
+        Every value in the lab is labeled measured, modeled or absent. Say whether the switch can
+        measure it (which command, table or counter), or whether it would be modeled, and from what.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other ways you considered
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you like to work on it?
+      options:
+        - Yes, I'd like to open a pull request
+        - I can help test it
+        - No, just sharing the idea
+    validations:
+      required: true

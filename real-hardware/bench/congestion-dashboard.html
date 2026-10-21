@@ -1,0 +1,555 @@
+<title>Congestion Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#0a0f18; --panel:#131d2b; --raised:#1a2636; --line:#2a3b52; --line2:#3a4f6b;
+    --ink:#f0f5fb; --mut:#a4b6ca; --dim:#6b7d94;
+    --cyan:#38bdf8; --grn:#34d399; --red:#fb5c73; --amber:#fbbf24; --violet:#b794f6;
+    --f:'Space Grotesk',system-ui,sans-serif; --m:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--f);-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(1100px 600px at 78% -15%,rgba(56,189,248,.05),transparent 60%);}
+  .wrap{max-width:1360px;margin:0 auto;padding:20px 24px 56px}
+  .row{display:flex;gap:14px}
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-size:20px;font-weight:700;letter-spacing:.2px;display:flex;align-items:center;gap:10px}
+  .livedot{width:9px;height:9px;border-radius:50%;background:var(--dim);box-shadow:0 0 0 0 rgba(52,211,153,.5)}
+  .livedot.on{background:var(--grn);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  .sub{color:var(--mut);font-size:12px;margin-top:3px}
+  .clock{font-family:var(--m);font-size:13px;color:var(--mut)}
+  /* status bar */
+  .status{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:14px;
+    padding:13px 18px;margin-bottom:16px;background:linear-gradient(90deg,var(--panel),var(--raised));transition:.3s}
+  .status .pill{font-family:var(--m);font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;
+    padding:6px 13px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap;color:var(--dim)}
+  .status .msg{font-size:13.5px;color:var(--mut);line-height:1.45}
+  .status .msg b{color:var(--ink);font-weight:600}
+  .status[data-m="congesting"]{border-color:rgba(251,92,115,.35);background:linear-gradient(90deg,rgba(251,92,115,.09),var(--raised))}
+  .status[data-m="congesting"] .pill{color:var(--red);border-color:rgba(251,92,115,.5);background:rgba(251,92,115,.1)}
+  .status[data-m="roce"]{border-color:rgba(183,148,246,.35);background:linear-gradient(90deg,rgba(183,148,246,.09),var(--raised))}
+  .status[data-m="roce"] .pill{color:var(--violet);border-color:rgba(183,148,246,.5);background:rgba(183,148,246,.1)}
+  .status[data-m="starting"] .pill{color:var(--amber);border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.1)}
+  .status[data-m="baseline"]{border-color:rgba(52,211,153,.3);background:linear-gradient(90deg,rgba(52,211,153,.08),var(--raised))}
+  .status[data-m="baseline"] .pill{color:var(--grn);border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.1)}
+  .status[data-m="inject"]{border-color:rgba(251,191,36,.4);background:linear-gradient(90deg,rgba(251,191,36,.11),rgba(183,148,246,.06))}
+  .status[data-m="inject"] .pill{color:var(--amber);border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.12)}
+  .status[data-m="burst"]{border-color:rgba(183,148,246,.35);background:linear-gradient(90deg,rgba(183,148,246,.09),var(--raised))}
+  .status[data-m="burst"] .pill{color:var(--violet);border-color:rgba(183,148,246,.5);background:rgba(183,148,246,.1)}
+
+  /* topology */
+  .topo{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:22px 26px;margin-bottom:16px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;overflow-x:auto}
+  .tnode{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:120px;flex:0 0 auto}
+  .tnode .ic{width:46px;height:46px;border-radius:12px;border:1px solid var(--line2);background:var(--raised);
+    display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:5px}
+  .tnode .nm{font-weight:700;font-size:14px}
+  .tnode .role{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.6px}
+  .tnode .badge{font-family:var(--m);font-size:11px;margin-top:4px;padding:2px 8px;border-radius:6px;
+    background:rgba(52,211,153,.12);color:var(--grn);border:1px solid rgba(52,211,153,.25)}
+  .tnode.down .badge{background:rgba(251,92,115,.12);color:var(--red);border-color:rgba(251,92,115,.3)}
+  .tnode.bottleneck .ic{border-color:rgba(251,92,115,.4)}
+  /* link */
+  .dirtag{display:inline-block;font-family:var(--m);font-size:10px;letter-spacing:.5px;color:var(--grn);border:1px solid var(--grn);border-radius:10px;padding:1px 8px;margin-right:8px;cursor:help;opacity:.9;align-self:center}
+  .dirtag:hover{opacity:1;background:rgba(52,211,153,.12)}
+  .tlink{flex:1 1 auto;min-width:80px;text-align:center;padding:0 4px}
+  .tlink .spd{font-family:var(--m);font-size:10.5px;color:var(--dim);letter-spacing:.4px}
+  .tlink svg{display:block;width:100%;height:22px}
+  .tlink .rate{font-family:var(--m);font-size:14px;font-weight:700;color:var(--cyan)}
+  .tlink.b25 .spd,.tlink.b25 .rate{color:var(--red)}
+
+  /* grid */
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);font-weight:600;margin:20px 2px 10px}
+  .grid{display:grid;gap:14px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:1000px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+  .card{position:relative;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:16px 17px;overflow:hidden}
+  .card .rail{position:absolute;left:0;top:0;bottom:0;width:3px;opacity:.9}
+  .card .lab{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.7px;font-weight:600}
+  .card .val{font-family:var(--m);font-weight:700;font-size:30px;line-height:1;margin-top:9px;font-variant-numeric:tabular-nums}
+  .card .u{font-size:14px;color:var(--dim);font-weight:400;margin-left:2px}
+  .card .note{color:var(--dim);font-size:11px;margin-top:9px;line-height:1.4}
+  .card.wide{grid-column:span 2}
+  .card.hero{grid-column:span 2}
+  .chartwrap svg{display:block;width:100%;height:200px}
+  .leg{float:right;font-size:10.5px;color:var(--mut);font-weight:400;text-transform:none;letter-spacing:0}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 12px;vertical-align:middle}
+
+  /* dcqcn loop */
+  .loopstate{float:right;font-family:var(--m);font-size:10px;font-weight:700;letter-spacing:.6px;
+    padding:3px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--dim);text-transform:uppercase}
+  .loopstate.on{color:var(--grn);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1)}
+  .loop{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:20px 18px;
+    display:flex;align-items:stretch;gap:6px;overflow-x:auto;transition:.3s;opacity:.55}
+  .loop.on{opacity:1;border-color:rgba(183,148,246,.3);background:linear-gradient(180deg,rgba(183,148,246,.05),var(--panel))}
+  .lstage{flex:1 1 0;min-width:120px;text-align:center;padding:6px 4px;border-radius:10px;transition:.3s}
+  .loop.on .lstage{background:rgba(183,148,246,.06)}
+  .loop.on .lstage.react{background:rgba(52,211,153,.08)}
+  .lnum{font-family:var(--m);font-size:10px;color:var(--dim);border:1px solid var(--line2);border-radius:50%;
+    width:20px;height:20px;line-height:19px;margin:0 auto 7px;display:block}
+  .loop.on .lnum{color:var(--violet);border-color:rgba(183,148,246,.5)}
+  .lt{font-size:11.5px;color:var(--mut);font-weight:600;line-height:1.3;min-height:30px}
+  .lv{font-family:var(--m);font-size:21px;font-weight:700;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
+  .lu{font-size:11px;color:var(--dim)}
+  .lstage.react .lv{color:var(--grn)}
+  .larrow{display:flex;align-items:center;color:var(--dim);font-size:16px;flex:0 0 auto}
+  .loop.on .larrow{color:var(--violet);animation:slide 1.2s infinite}
+  @keyframes slide{0%,100%{opacity:.4;transform:translateX(0)}50%{opacity:1;transform:translateX(3px)}}
+  .loopback{font-size:12px;color:var(--mut);margin-top:11px;padding:11px 15px;border:1px dashed var(--line2);border-radius:10px;line-height:1.5}
+  .loopback b{color:var(--grn)}
+  .scope{display:block;font-size:9.5px;font-weight:400;color:var(--dim);letter-spacing:.3px;margin-top:2px;text-transform:none}
+  /* platform sensors */
+  .plat{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.plat{grid-template-columns:1fr}}
+  .pcard{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:15px 17px}
+  .pcard h4{font-size:13px;font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .pcard h4 .role{font-family:var(--m);font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;font-weight:500}
+  .pcard h4 .via{font-family:var(--m);font-size:9px;font-weight:700;letter-spacing:.7px;
+    padding:2px 6px;border-radius:3px;border:1px solid rgba(56,189,248,.45);color:var(--cyan);
+    background:rgba(56,189,248,.08)}
+  .pcard h4 .via.ssh{color:var(--dim);border-color:var(--line2);background:none}
+  .pcard h4 .tot{margin-left:auto;font-family:var(--m);font-size:15px;font-weight:700;color:var(--amber)}
+  .prow{display:flex;align-items:baseline;gap:8px;font-size:11.5px;padding:3px 0;border-bottom:1px solid rgba(42,59,82,.35)}
+  .prow:last-child{border-bottom:0}
+  .prow .k{color:var(--dim);flex:0 0 auto;min-width:112px}
+  .prow .v{font-family:var(--m);font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  .prow .hint{margin-left:auto;font-family:var(--m);font-size:9.5px;color:var(--dim)}
+  .psub{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin:11px 0 5px;font-weight:600}
+  .bar{flex:1;height:4px;border-radius:2px;background:var(--raised);overflow:hidden;min-width:40px}
+  .bar i{display:block;height:100%;background:var(--grn);border-radius:2px}
+  .bar i.warm{background:var(--amber)} .bar i.hot{background:var(--red)}
+  .fangrid{display:flex;flex-wrap:wrap;gap:3px}
+  .fan .rpm{font-style:normal;font-family:var(--m);font-size:10px;color:var(--dim);margin-left:5px}
+  .fan{font-family:var(--m);font-size:9.5px;padding:2px 5px;border-radius:3px;background:var(--raised);
+       border:1px solid var(--line2);color:var(--mut)}
+  .transport{font-family:var(--m);font-size:10px;color:var(--dim);margin:9px 2px 0;letter-spacing:.3px}
+  .transport b{color:var(--cyan);font-weight:600}
+  .caveat{font-size:10.5px;color:var(--dim);margin-top:9px;line-height:1.45;padding-top:8px;border-top:1px dashed var(--line2)}
+  /* ---- ask panel ---- */
+  #askTab{position:fixed;right:0;top:50%;transform:translateY(-50%) translateX(0);z-index:60;
+    writing-mode:vertical-rl;background:var(--panel);color:var(--mut);border:1px solid var(--line);
+    border-right:0;border-radius:10px 0 0 10px;padding:16px 9px;cursor:pointer;font-family:var(--f);
+    font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;transition:.18s;
+    display:flex;align-items:center;gap:9px}
+  #askTab:hover{color:var(--ink);border-color:var(--line2);padding-right:13px}
+  #askTab .bd{width:7px;height:7px;border-radius:50%;background:var(--dim);writing-mode:horizontal-tb}
+  #askTab .bd.on{background:var(--grn);box-shadow:0 0 7px rgba(52,211,153,.6)}
+  #ask{position:fixed;right:0;top:0;bottom:0;width:min(460px,94vw);z-index:61;background:var(--panel);
+    border-left:1px solid var(--line2);display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .22s ease;box-shadow:-18px 0 46px rgba(0,0,0,.35)}
+  #ask.on{transform:none}
+  #ask header{display:flex;align-items:center;gap:10px;padding:15px 17px;border-bottom:1px solid var(--line)}
+  #ask header h3{font-size:14px;font-weight:700;letter-spacing:.2px}
+  #ask header .brain{margin-left:auto;font-family:var(--m);font-size:9.5px;color:var(--dim);text-align:right;line-height:1.35}
+  #ask header .x{cursor:pointer;color:var(--dim);font-size:19px;line-height:1;padding:0 3px}
+  #ask header .x:hover{color:var(--ink)}
+  #askLog{flex:1;overflow-y:auto;padding:15px 17px;display:flex;flex-direction:column;gap:13px}
+  .msg{font-size:13.5px;line-height:1.6}
+  .msg.q{color:var(--ink);font-weight:600;border-left:2px solid var(--cyan);padding-left:11px}
+  .msg.a{color:var(--mut);white-space:pre-wrap}
+  .msg.a b,.msg.a strong{color:var(--ink);font-weight:600}
+  .msg.a code{font-family:var(--m);font-size:12px;background:var(--raised);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  .msg.err{color:var(--red);font-size:12.5px;background:rgba(251,92,115,.07);
+    border:1px solid rgba(251,92,115,.25);border-radius:8px;padding:9px 11px}
+  .msg .look{font-family:var(--m);font-size:9.5px;color:var(--dim);margin-top:6px;letter-spacing:.3px}
+  .thinking{color:var(--dim);font-size:12.5px;font-style:italic}
+  #askForm{border-top:1px solid var(--line);padding:12px 14px;display:flex;gap:8px}
+  #askIn{flex:1;background:var(--raised);border:1px solid var(--line2);border-radius:9px;
+    color:var(--ink);font-family:var(--f);font-size:13.5px;padding:10px 12px;resize:none;height:44px}
+  #askIn:focus{outline:none;border-color:var(--cyan)}
+  #askGo{background:var(--raised);border:1px solid var(--line2);border-radius:9px;color:var(--ink);
+    padding:0 15px;cursor:pointer;font-weight:600;font-size:13px}
+  #askGo:hover{border-color:var(--cyan)}
+  #askGo:disabled{opacity:.45;cursor:not-allowed}
+  .seeds{display:flex;flex-wrap:wrap;gap:6px;padding:0 17px 13px}
+  .seed{font-size:11px;color:var(--mut);background:var(--raised);border:1px solid var(--line);
+    border-radius:999px;padding:5px 10px;cursor:pointer}
+  .seed:hover{border-color:var(--cyan);color:var(--ink)}
+  /* controls */
+  .ctrl{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:22px}
+  button{font-family:var(--f);font-weight:600;font-size:13.5px;padding:13px 20px;border-radius:11px;cursor:pointer;
+    border:1px solid var(--line2);background:var(--raised);color:var(--ink);transition:.15s;display:flex;align-items:center;gap:9px}
+  button .k{font-family:var(--m);font-size:11px;color:var(--dim)}
+  button:hover{border-color:var(--mut);transform:translateY(-1px)}
+  button.baseline.active{border-color:var(--grn);background:rgba(52,211,153,.14);box-shadow:0 0 22px rgba(52,211,153,.18)}
+  button.reverse.active{border-color:var(--grn);background:rgba(52,211,153,.14);box-shadow:0 0 22px rgba(52,211,153,.18)}
+  button.inject.active{border-color:var(--amber);background:rgba(251,191,36,.14);box-shadow:0 0 22px rgba(251,191,36,.18)}
+  button.congest.active{border-color:var(--red);background:rgba(251,92,115,.14);box-shadow:0 0 22px rgba(251,92,115,.18)}
+  button.roce.active{border-color:var(--violet);background:rgba(183,148,246,.14);box-shadow:0 0 22px rgba(183,148,246,.18)}
+  button.burst.active{border-color:var(--violet);background:rgba(183,148,246,.14);box-shadow:0 0 22px rgba(183,148,246,.18)}
+  .ctrlsep{width:1px;height:36px;background:var(--line);margin:0 4px}
+  .ctrllab{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);font-weight:600;width:100%;margin:2px 2px -4px}
+  button.stop{margin-left:auto;border-color:var(--line2)}
+  button.stop:hover{border-color:var(--ink)}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .runtag{font-family:var(--m);font-size:10px;color:var(--grn);margin-left:7px;opacity:0;transition:.2s}
+  button.active .runtag{opacity:1}
+  .foot{color:var(--dim);font-size:11.5px;margin-top:22px;line-height:1.65;border-top:1px solid var(--line);padding-top:15px}
+  .foot b{color:var(--mut);font-weight:600}
+  .prov{color:var(--grn)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Congestion Control Room <span class="livedot" id="live"></span></h1>
+      <div class="sub">Two Dell Z9100 · community SONiC · 100G→25G speed-mismatch fabric · every value read live over gNMI/SSH</div>
+    </div>
+    <div class="clock" id="clock">—</div>
+  </header>
+
+  <div class="status" id="status" data-m="idle">
+    <span class="pill" id="pill">idle</span>
+    <span class="msg" id="msg">No traffic. Start with <b>Healthy baseline</b>, then <b>Inject congestion</b> to watch the fabric heal itself.</span>
+  </div>
+
+  <!-- topology -->
+  <div class="topo">
+    <div class="tnode" id="nPc2"><div class="ic">🖥️</div><div class="nm">PC2</div><div class="role">sender · ConnectX-4</div><div class="badge" id="bPc2">100G</div></div>
+    <span id="dirtag" class="dirtag" hidden title="CONTROL EXPERIMENT. Same two NICs, same RoCE, same bursty software pacing &#10; as every other mode - the only thing removed is the 4:1 speed step.&#10;&#10;Forward (pc2 -> pc1): 100G in, 25G out. Three quarters of every burst&#10; has nowhere to go, so it queues, marks and pauses.&#10;&#10;Reverse (pc1 -> pc2): 25G in, 100G out. The exit is WIDER than the&#10; entrance, so nothing can queue behind it - PFC and ECN sit at zero&#10; while carrying MORE throughput (~23 Gb/s vs ~12.5).&#10;&#10;That is the proof the speed step is the cause and the traffic is not."></span><div class="tlink" id="lA"><div class="spd">100G · Ethernet0</div><svg viewBox="0 0 100 22" preserveAspectRatio="none"><line class="ln" x1="0" y1="11" x2="100" y2="11"/><line class="fl" x1="0" y1="11" x2="100" y2="11"/></svg><div class="rate" id="rA">0.0</div></div>
+    <div class="tnode" id="nSwa"><div class="ic">🔀</div><div class="nm">swa</div><div class="role">spine · Z9100</div><div class="badge" id="bSwa">up</div></div>
+    <div class="tlink" id="lI"><div class="spd">100G · inter-switch</div><svg viewBox="0 0 100 22" preserveAspectRatio="none"><line class="ln" x1="0" y1="11" x2="100" y2="11"/><line class="fl" x1="0" y1="11" x2="100" y2="11"/></svg><div class="rate" id="rI">0.0</div></div>
+    <div class="tnode bottleneck" id="nSwb"><div class="ic">🔀</div><div class="nm">swb</div><div class="role">leaf · Z9100</div><div class="badge" id="bSwb">up</div></div>
+    <div class="tlink b25" id="lB"><div class="spd">25G · Ethernet8 ⚠</div><svg viewBox="0 0 100 22" preserveAspectRatio="none"><line class="ln" x1="0" y1="11" x2="100" y2="11"/><line class="fl" x1="0" y1="11" x2="100" y2="11"/></svg><div class="rate" id="rB">0.0</div></div>
+    <div class="tnode" id="nPc1"><div class="ic">🖥️</div><div class="nm">PC1</div><div class="role">receiver · CX-4 Lx</div><div class="badge" id="bPc1">25G</div></div>
+  </div>
+
+  <!-- hero + throughput -->
+  <div class="grid g4">
+    <div class="card hero chartwrap">
+      <div class="lab">Offered vs delivered — the 25G ceiling
+        <span class="leg"><span class="dot" style="background:var(--cyan)"></span>offered<span class="dot" style="background:var(--grn)"></span>delivered<span class="dot" style="background:var(--red)"></span>drops</span></div>
+      <svg id="chart" viewBox="0 0 680 200" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card"><div class="rail" style="background:var(--cyan)"></div>
+      <div class="lab">Offered load</div><div class="val" style="color:var(--cyan)" id="vOff">0.0<span class="u">Gb/s</span></div>
+      <div class="note">arriving at swb from the 100G side</div></div>
+    <div class="card"><div class="rail" style="background:var(--grn)"></div>
+      <div class="lab">Delivered to PC1</div><div class="val" style="color:var(--grn)" id="vDel">0.0<span class="u">Gb/s</span></div>
+      <div class="note">what actually fits through 25G</div></div>
+  </div>
+
+  <div class="sec">How the fabric responds to congestion</div>
+  <div class="grid g3">
+    <div class="card"><div class="rail" style="background:var(--red)"></div>
+      <div class="lab">Congestion drops</div><div class="val" style="color:var(--red)" id="vDrop">0<span class="u">/s</span></div>
+      <div class="note" id="nDrop">packets dropped at the 25G egress — <b style="color:var(--red)">lossy</b> path (UDP)</div></div>
+    <div class="card"><div class="rail" style="background:var(--violet)"></div>
+      <div class="lab">PFC pause frames</div><div class="val" style="color:var(--violet)" id="vPfc">0<span class="u">/s</span></div>
+      <div class="note">prio 3 · pause sent upstream to slow the sender — <b style="color:var(--violet)">lossless</b></div></div>
+    <div class="card"><div class="rail" style="background:var(--amber)"></div>
+      <div class="lab">ECN marked</div><div class="val" style="color:var(--amber)" id="vEcn">0<span class="u">/s</span></div>
+      <div class="note" id="nEcn">RoCE packets marked at the 25G egress (chip counter) — DCQCN signal</div></div>
+  </div>
+
+  <div class="sec">The DCQCN feedback loop — how the fabric self-regulates <span class="loopstate" id="loopState">runs during lossless RoCE</span></div>
+  <div class="loop" id="loop">
+    <div class="lstage"><span class="lnum">1</span><div class="lt">swb marks at the 25G exit<br><span class="scope">queue 3 only</span></div><div class="lv" id="l1">0</div><div class="lu">marks/s</div></div>
+    <div class="larrow">→</div>
+    <div class="lstage" title="Wider scope than step 1, so this number is legitimately larger — it is not a mismatch."><span class="lnum">2</span><div class="lt">PC1 sees marked packets<br><span class="scope">all priorities, both hops</span></div><div class="lv" id="l2">0</div><div class="lu">/s</div></div>
+    <div class="larrow">→</div>
+    <div class="lstage"><span class="lnum">3</span><div class="lt">PC1 sends CNP<br>back to the sender</div><div class="lv" id="l3">0</div><div class="lu">CNP/s</div></div>
+    <div class="larrow">→</div>
+    <div class="lstage"><span class="lnum">4</span><div class="lt">PC2 handles CNP<br>cuts its rate</div><div class="lv" id="l4">0</div><div class="lu">/s</div></div>
+    <div class="larrow">→</div>
+    <div class="lstage react"><span class="lnum">5</span><div class="lt">PC2 send rate<br><span class="scope">what the loop settled on</span></div><div class="lv" id="l5">0.0</div><div class="lu">Gb/s</div></div>
+  </div>
+  <div class="loopback" id="loopback"><span id="loopcap">↩ The sender's lower rate eases the queue → marks slow → it ramps back up.</span></div>
+
+  <div class="sec">Platform sensors — both switches, read live over gNMI</div>
+  <div class="plat">
+    <div class="pcard"><h4>swa <span class="role">spine side · 100G</span><span class="via" id="swaVia">—</span><span class="tot" id="swaW">—</span></h4>
+      <div id="swaBody"></div></div>
+    <div class="pcard"><h4>swb <span class="role">leaf side · 25G exit</span><span class="via" id="swbVia">—</span><span class="tot" id="swbW">—</span></h4>
+      <div id="swbBody"></div></div>
+  </div>
+  <div class="transport" id="transport"></div>
+  <div class="grid g4" style="margin-top:14px">
+    <div class="card"><div class="rail" style="background:var(--grn)"></div>
+      <div class="lab">Queue-3 watermark</div><div class="val" style="color:var(--grn)" id="vWm">0<span class="u">KB</span></div>
+      <div class="note">peak buffer occupancy at the bottleneck</div></div>
+  </div>
+
+  <div id="askTab" onclick="askOpen(1)"><span class="bd" id="askDot"></span>Ask the bench</div>
+  <aside id="ask">
+    <header><h3>Ask the bench</h3>
+      <div class="brain" id="askBrain">…</div>
+      <span class="x" onclick="askOpen(0)">&times;</span></header>
+    <div id="askLog"><div class="msg a">Ask anything about this setup — it reads the live counters,
+the platform sensors and everything we measured on this bench before it answers.</div></div>
+    <div class="seeds">
+      <span class="seed" onclick="askSeed(this)">What is happening right now?</span>
+      <span class="seed" onclick="askSeed(this)">Why is PFC not zero?</span>
+      <span class="seed" onclick="askSeed(this)">Does congestion raise the power draw?</span>
+      <span class="seed" onclick="askSeed(this)">What is the 25G exit dropping?</span>
+      <span class="seed" onclick="askSeed(this)">Are the fans telling the truth?</span>
+    </div>
+    <form id="askForm" onsubmit="askSend(event)">
+      <textarea id="askIn" placeholder="Ask about the bench…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){askSend(event)}"></textarea>
+      <button id="askGo" type="submit">Ask</button>
+    </form>
+  </aside>
+
+  <div class="ctrl">
+    <div class="ctrllab">The story — normal traffic, then congestion that heals itself</div>
+    <button class="reverse" id="btnRv" onclick="act('reverse')">▶ Healthy reference <span class="k">pc1→pc2 · no narrowing</span><span class="runtag">● running</span></button>
+    <button class="baseline" id="btnB" onclick="act('baseline')">▶ Light load <span class="k">12G into the 4:1 step</span><span class="runtag">● running</span></button>
+    <button class="inject" id="btnI" onclick="act('inject')">▶ Inject congestion <span class="k">pile on → self-heal</span><span class="runtag">● running</span></button>
+    <div class="ctrllab" style="margin-top:8px">Deep dive — the two extremes</div>
+    <button class="congest" id="btnC" onclick="act('congest')">▶ Lossy flood <span class="k">UDP → drops</span><span class="runtag">● running</span></button>
+    <button class="roce" id="btnR" onclick="act('roce')">▶ Single-flow loop <span class="k">one QP · sawtooth</span><span class="runtag">● running</span></button>
+    <button class="burst" id="btnBu" onclick="act('burst')">▶ Bursty traffic <span class="k">fires → quiet → repeat</span><span class="runtag">● running</span></button>
+    <button class="stop" id="btnS" onclick="act('stop')">■ Go idle <span class="k">silence traffic</span></button>
+  </div>
+
+  <div class="foot">
+    <span class="prov">● Measured on real metal.</span> Every number is read live from two physical Dell Z9100 switches (community SONiC) and two ConnectX hosts over SSH/gNMI. The 25G egress is a real breakout port (QSFP→4×SFP28). <b>Healthy baseline</b> = a steady 12G RoCE flow with headroom. <b>Inject congestion</b> adds an aggressor so demand exceeds 25G — DCQCN throttles the senders via PFC + ECN and holds it lossless (0 drops). <b>Lossy flood</b> = plain UDP, so the switch just <b>drops</b> the overflow (no feedback). <b>Single-flow loop</b> = one RoCE queue pair, showing the control loop without many flows averaging it out. Congestion control here is <b>ConnectX firmware DCQCN</b>, not the vanilla Zhu et al. (SIGCOMM 2015) algorithm — the sender-side state machine differs in fast recovery and target-rate clamping. ECN now reads from the standard SAI counter (SAI_QUEUE_STAT_WRED_ECN_MARKED_PACKETS) over gNMI, after enabling the WRED_ECN_QUEUE_STAT group that SONiC ships disabled.
+  </div>
+</div>
+
+<script>
+const RB = [];   // rolling window for the smoothed headline rate
+const $=id=>document.getElementById(id);
+const f1=n=>(+n||0).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+const f0=n=>Math.round(+n||0).toLocaleString();
+const kb=b=>Math.round((+b||0)/1024).toLocaleString();
+const MODES={
+  idle:['idle','No traffic. Start with <b>Healthy baseline</b>, then <b>Inject congestion</b> to watch the fabric self-heal. <b>Lossy flood</b> and <b>Single-flow loop</b> are the deep-dive contrasts.'],
+  starting:['starting…','<b>Starting the flow…</b> waiting for traffic to ramp. If nothing appears in a few seconds, the generator didn\'t launch — hit Go idle and retry.'],
+  reverse:['● healthy reference — no narrowing','<b>The control experiment.</b> Same two NICs, same RoCE, same bursty pacing — but the path runs <b>pc1 (25G) &rarr; pc2 (100G)</b>, so it never narrows. Nothing can queue behind a wider exit. <b style="color:var(--grn)">PFC and ECN should sit at zero</b>. Compare with <b>healthy baseline</b>, which sends the same traffic <i>into</i> the 4:1 step and pauses continuously. Same traffic, same hardware — the only variable is the speed step.'],
+  baseline:['● light load — into the 4:1 step','<b>A light average, but not a quiet link.</b> ~12G into the 25G exit — well under the ceiling, and <b style="color:var(--grn)">zero drops</b>. Yet <b style="color:var(--violet)">PFC</b> and <b style="color:var(--amber)">ECN</b> run continuously, because software pacing sends the 12G as <b>line-rate bursts</b> from a 100G NIC and each burst overfills the queue. Utilisation says fine; the queue says otherwise. Press <b>healthy reference</b> to see the same traffic with the step removed.'],
+  inject:['● congestion — self-healing','<b>Congestion injected.</b> An aggressor flow piles on, so demand exceeds 25G. Offered pins at the <b>25G ceiling</b>, <b style="color:var(--violet)">PFC</b> and <b style="color:var(--amber)">ECN</b> surge, DCQCN throttles the senders — yet <b style="color:var(--grn)">drops stay 0</b>. The fabric heals itself, no operator.'],
+  congesting:['● lossy flood','<b>Lossy congestion.</b> ~60G of UDP forced into a 25G port — UDP ignores backpressure, so <b style="color:var(--red)">drops</b> climb and delivered pins at the ceiling. No PFC/ECN, no self-healing — data is simply lost.'],
+  roce:['● single-flow loop','<b>One queue pair, no averaging.</b> The sender ramps, the switch marks (CP), the receiving NIC returns a CNP (NP), the sender cuts its rate (RP), then ramps again. With many flows these sawteeth sit out of phase and the aggregate looks smooth; with one you see the control law itself. This is <b>ConnectX firmware DCQCN</b>, not the 2015 paper algorithm.'],
+  burst:['● bursty traffic','<b>Real DC traffic pattern.</b> Traffic fires in ~6s bursts (like a GPU all-reduce), then goes quiet. Watch <b style="color:var(--violet)">PFC</b> and <b style="color:var(--amber)">ECN</b> spike during each burst and <b style="color:var(--grn)">fall to 0</b> in the gaps — the signals exist only while there\'s pressure.']
+};
+// `rev` flips the marching dashes. In the healthy-reference mode the traffic
+// runs pc1 -> pc2, i.e. right-to-left across this row, and arrows that kept
+// marching left-to-right were simply showing the wrong direction.
+function setFlow(on, rev){
+  document.querySelectorAll('.tlink .fl').forEach(e=>{
+    e.classList.toggle('go', on);
+    e.classList.toggle('rev', !!rev);
+  });
+  const t = document.getElementById('dirtag');
+  if (t){
+    t.hidden = !rev;
+    t.textContent = rev ? 'pc1 → pc2 · reverse' : '';
+  }
+}
+async function tick(){
+  let s; try{s=await (await fetch('data',{cache:'no-store'})).json();}catch(e){ $('live').className='livedot'; return; }
+  const a=s.swa||{},b=s.swb||{},p2=s.pc2||{},p1=s.pc1||{};
+  // SMOOTHED over the last few polls. The underlying traffic really is bursty — a
+  // 100G NIC software-paced to 12G sends line-rate lumps — so a single-interval
+  // rate swings between about 8 and 22 Gb/s on a steady flow. The chart below
+  // still plots every raw sample; this is only the big headline figure, which
+  // reads as broken instrumentation when it jumps 1 -> 17 -> 1.
+  RB.push({i:(b.in_bps||0)/1e9, o:(b.out_bps||0)/1e9});
+  if (RB.length > 4) RB.shift();
+  const off = RB.reduce((t,x)=>t+x.i,0)/RB.length;
+  const del = RB.reduce((t,x)=>t+x.o,0)/RB.length;
+  const flowing=!!s.flowing;
+  // mode + status
+  let m=s.phase||'idle';
+  if((m==='congesting'||m==='roce'||m==='inject'||m==='baseline') && !flowing) m='starting';
+  const mm=MODES[m]||MODES.idle;
+  $('status').dataset.m = (m==='starting'?'starting':m);
+  $('pill').textContent=mm[0]; $('msg').innerHTML=mm[1];
+  $('live').className='livedot'+(flowing?' on':'');
+  $('btnRv').classList.toggle('active', s.phase==='reverse');
+  $('btnB').classList.toggle('active', s.phase==='baseline');
+  $('btnI').classList.toggle('active', s.phase==='inject');
+  $('btnC').classList.toggle('active', s.phase==='congesting');
+  $('btnR').classList.toggle('active', s.phase==='roce');
+  $('btnBu').classList.toggle('active', s.phase==='burst');
+  // numbers
+  $('vOff').innerHTML=f1(off)+'<span class="u">Gb/s</span>';
+  $('vDel').innerHTML=f1(del)+'<span class="u">Gb/s</span>';
+  $('vDrop').innerHTML=f0(b.disc_rate)+'<span class="u">/s</span>';
+  $('nDrop').innerHTML = (s.phase==='congesting')
+    ? 'packets dropped at the 25G egress — <b style="color:var(--red)">lossy</b> path, data is lost'
+    : (s.phase==='inject'||s.phase==='roce'||s.phase==='burst')
+      ? '<b style="color:var(--grn)">0 = lossless.</b> DCQCN pauses &amp; marks instead of dropping'
+      : 'only the <b style="color:var(--red)">lossy</b> UDP path drops — RoCE stays at 0';
+  $('vPfc').innerHTML=f0(b.pfc3tx_rate)+'<span class="u">/s</span>';
+  $('vEcn').innerHTML=f0(b.ecn_rate)+'<span class="u">/s</span>';
+  $('nEcn').innerHTML='RoCE packets marked at the 25G egress · '+f0(b.ecn_total)+' total (chip counter)';
+  $('vWm').innerHTML=kb(b.q3_wm)+'<span class="u">KB</span>';
+  renderPlat('swa',(s.plat||{}).swa); renderPlat('swb',(s.plat||{}).swb);
+  const tr=s.transport, te=$('transport');
+  if(te){ te.innerHTML = tr
+    ? ('this sweep: <b>'+tr.gnmi+' read over gNMI</b>'
+       + (tr.fallback?(' · '+tr.fallback+' fell back to SSH'+(tr.err?' ('+tr.err+')':'')):' · 0 fell back')
+       + ' — counters via <b>'+(tr.counters_via||'?')+'</b>, platform sensors via gNMI')
+    : ''; }
+  // topology
+  $('rA').textContent=f1(off); $('rI').textContent=f1(off); $('rB').textContent=f1(del);
+  // Three states, not two. `oper` is absent whenever the read did not return it,
+  // and an absent value is NOT a down link — reading it as one showed "down" on a
+  // switch that was forwarding 20 Gb/s for a whole day.
+  const swbUp = (b.oper===undefined||b.oper===null) ? null : (b.oper==='up');
+  $('bSwb').textContent = swbUp===null ? '—' : (swbUp ? 'up' : 'down');
+  $('nSwb').classList.toggle('down', swbUp===false);
+  $('bPc1').textContent=((+p1.car)===1)?'25G ●':'down'; $('nPc1').classList.toggle('down',(+p1.car)!==1);
+  $('bPc2').textContent=((+p2.car)===1)?'100G ●':'down'; $('nPc2').classList.toggle('down',(+p2.car)!==1);
+  setFlow(flowing, s.phase==='reverse');
+  // DCQCN feedback loop
+  const loopOn = (s.phase==='roce'||s.phase==='inject'||s.phase==='burst') && flowing;
+  $('loop').classList.toggle('on', loopOn);
+  $('loopState').classList.toggle('on', loopOn);
+  $('loopState').textContent = loopOn ? '● active' : 'runs during congestion';
+  $('l1').textContent=f0(b.ecn_rate);
+  $('l2').textContent=f0(p1.ecnmark_rate);
+  $('l3').textContent=f0(p1.cnpsent_rate);
+  $('l4').textContent=f0(p2.cnphandled_rate);
+  $('l5').textContent=f1(off);
+  // Caption must describe THIS mode. Never assert a ceiling the port is not at.
+  const cap=$('loopcap');
+  if(cap){
+    const near=del>22;                       // actually pressed against the 25G exit
+    if(s.phase==='baseline')
+      cap.innerHTML="\u21a9 Demand is below the 25G exit, so the loop is not the limit here \u2014 "+
+        "the rate is set by the sender's own pacing. Marks and pauses still appear because the "+
+        "marking threshold (Kmin 100 KB \u2248 32 \u00b5s of drain) sits below DCQCN's ~50 \u00b5s "+
+        "feedback delay, so bursts are marked before the loop can answer.";
+    else if(s.phase==='burst')
+      cap.innerHTML="\u21a9 Burst onset outruns the feedback loop, so <b style='color:var(--violet)'>PFC</b> "+
+        "absorbs the leading edge and DCQCN takes over the sustained rate. In the quiet gaps both fall to zero.";
+    else if(s.phase==='congesting')
+      cap.innerHTML="\u21a9 No feedback at all on this path \u2014 UDP ignores marks and pauses, so the switch "+
+        "just <b style='color:var(--red)'>drops</b> the excess, indefinitely.";
+    else if(near)
+      cap.innerHTML="\u21a9 The sender's lower rate eases the queue \u2192 marks slow \u2192 it ramps back up. "+
+        "Settled against the <b>25G exit</b>, lossless, with no operator in the loop.";
+    else
+      cap.innerHTML="\u21a9 The sender's lower rate eases the queue \u2192 marks slow \u2192 it ramps back up. "+
+        "Settled at <b>"+f1(del)+" Gb/s</b>, below the 25G exit.";
+  }
+  $('clock').textContent=new Date((s.t||0)*1000).toLocaleTimeString();
+  drawChart(s.hist||[]);
+}
+function renderPlat(id,p){
+  const w=$(id+'W'), body=$(id+'Body'), via=$(id+'Via');
+  if(!p||!p.temp){ if(w) w.textContent='—'; if(via) via.textContent='—'; return; }
+  w.textContent=f1(p.psu_total)+' W';
+  if(via){ via.textContent=p.via||'SSH'; via.className='via'+((p.via==='gNMI')?'':' ssh');
+           via.title=(p.via==='gNMI')
+             ? 'Read over gNMI — a Get to :8080 on the switch, no TLS, no config in CONFIG_DB.'
+             : 'Fell back to SSH + sonic-db-cli. Same data, different transport.'; }
+  const psu=Object.keys(p.psu||{}).sort().map(k=>
+    `<div class="prow"><span class="k">${k}</span><span class="v">${f1(p.psu[k])} W</span></div>`).join('');
+  // temperatures, hottest first, with a headroom bar against the platform's own threshold
+  const T=p.temp||{}, TH=p.thr||{};
+  const temps=Object.keys(T).filter(k=>T[k]!=null).sort((x,y)=>T[y]-T[x]).map(k=>{
+    const hi=parseFloat((TH[k]||[])[0])||0, v=T[k];
+    const pct=hi>0?Math.min(100,v/hi*100):Math.min(100,v/60*100);
+    const cls=hi>0&&v>hi*0.9?'hot':(hi>0&&v>hi*0.75?'warm':'');
+    return `<div class="prow"><span class="k">${k}</span><span class="v">${f1(v)}°</span>`+
+           `<span class="bar"><i class="${cls}" style="width:${pct.toFixed(0)}%"></i></span>`+
+           `<span class="hint">${hi>0?('hi '+hi.toFixed(0)+'°'):'no threshold'}</span></div>`;}).join('');
+  const F=p.fan||{};
+  // Percentage AND raw RPM together. STATE_DB only carries the percentage; the
+  // RPM comes from the FPGA's own sysfs counters, which is the honest number and
+  // was the thing we previously and wrongly said this platform did not expose.
+  // FanTray<n>-Fan<m> maps to hwmon fan<idx>_input in tray order.
+  const R = p.rpm || {};
+  const rpmFor = k => {
+    const m = k.match(/FanTray(\d+)-Fan(\d+)/);
+    if (m) return R[String((+m[1]-1)*2 + (+m[2]))];
+    const q = k.match(/PSU(\d+)/);
+    if (q) return R[String(10 + (+q[1]))];
+    return undefined;
+  };
+  const fans=Object.keys(F).sort().map(k=>{
+    const r = rpmFor(k);
+    return `<span class="fan" title="${k}${r!=null?' — '+r+' RPM from the FPGA':''}">`+
+      `${k.replace('FanTray','T').replace('-Fan','.')} `+
+      `${F[k]!=null?Math.round(F[k])+'%':'—'}`+
+      `${r!=null?`<i class="rpm">${r}</i>`:''}</span>`;
+  }).join('');
+  body.innerHTML =
+    `<div class="psub">PSU output</div>${psu}`+
+    `<div class="psub">Temperature — ${Object.keys(T).length} sensors</div>${temps}`+
+    `<div class="psub">Fans — ${p.fan_n} (${p.fan_min!=null?Math.round(p.fan_min):'—'}–${p.fan_max!=null?Math.round(p.fan_max):'—'}%)</div>`+
+    `<div class="fangrid">${fans}</div>`+
+    `<div class="caveat">`+
+    (p.fan_bad
+      ? `<b style="color:var(--red)">${p.fan_bad} of ${p.fan_n} report status Not OK</b> — worth a look; since the plugin patch this means something. `
+      : `<b style="color:var(--grn)">All ${p.fan_n} healthy</b> — speed matches target on every one. `)+
+    `Each tile shows the SONiC <b>percentage</b> and the <b>raw RPM</b> the FPGA reports; SONiC derives the first from the second by dividing by 16,000. `+
+    `Until we patched it, Dell's plugin returned a hardcoded <span style="font-family:var(--m)">0</span> for the target speed, so thermalctld failed its 20% tolerance check every cycle and marked all 12 Not OK while they span perfectly normally. `+
+    `The one-line fix is the one Dell already shipped on the sibling S6100. `+
+    `PSU reports DC <b>output</b> only; input, voltage, current and PSU temp are empty. `+
+    `No ASIC die sensor exists — “ASIC On-board Rear” is a board sensor beside the chip.</div>`;
+}
+function drawChart(H){
+  const W=680,Ht=200,pad=6, CEIL=25;
+  if(H.length<2){ $('chart').innerHTML=''; return; }
+  const max=Math.max(30, ...H.map(h=>Math.max(h.off||0,h.del||0)))*1.12;
+  const X=i=>pad+i/(H.length-1)*(W-2*pad);
+  const Y=v=>Ht-pad-(v/max)*(Ht-2*pad-14);
+  const line=(k)=>H.map((h,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(h[k]||0).toFixed(1)).join(' ');
+  const area=(k)=>line(k)+`L${X(H.length-1).toFixed(1)} ${Ht-pad} L${X(0).toFixed(1)} ${Ht-pad} Z`;
+  let g=''; for(let v=10;v<max;v+=10){let y=Y(v);g+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="#182233" stroke-width="1"/><text x="${pad+2}" y="${y-3}" fill="#3a4a60" font-size="9" font-family="JetBrains Mono">${v}</text>`;}
+  const cy=Y(CEIL);
+  const ceil=`<line x1="${pad}" y1="${cy}" x2="${W-pad}" y2="${cy}" stroke="#fb5c73" stroke-width="1" stroke-dasharray="5 4" opacity=".7"/><text x="${W-pad-2}" y="${cy-4}" fill="#fb5c73" font-size="9.5" text-anchor="end" font-family="JetBrains Mono">25G line rate</text>`;
+  $('chart').innerHTML=g+ceil
+    +`<path d="${area('off')}" fill="#38bdf8" opacity=".10"/><path d="${line('off')}" fill="none" stroke="#38bdf8" stroke-width="2"/>`
+    +`<path d="${area('del')}" fill="#34d399" opacity=".12"/><path d="${line('del')}" fill="none" stroke="#34d399" stroke-width="2.2"/>`;
+}
+async function act(a){
+  const btns=['btnRv','btnB','btnI','btnC','btnR','btnBu','btnS'];
+  btns.forEach(x=>$(x).disabled=true);
+  try{ await fetch('action/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); }catch(e){}
+  setTimeout(()=>btns.forEach(x=>$(x).disabled=false),1500);
+  setTimeout(tick,500);
+}
+// flow-animation style (marching ants) injected so it only runs when .go
+const st=document.createElement('style');
+st.textContent='.tlink .ln{stroke:#22303f;stroke-width:2}.tlink .fl{stroke:#34d399;stroke-width:2.4;stroke-dasharray:7 9;stroke-dashoffset:0;opacity:0;transition:opacity .3s}.tlink.b25 .fl{stroke:#fb5c73}.tlink .fl.go{opacity:1;animation:march 1s linear infinite}@keyframes march{to{stroke-dashoffset:-32}}.tlink .fl.go.rev{animation:marchrev 1s linear infinite}@keyframes marchrev{to{stroke-dashoffset:32}}';
+document.head.appendChild(st);
+// ---- ask panel ----
+function askOpen(on){ $('ask').classList.toggle('on',!!on); if(on) $('askIn').focus(); }
+function askSeed(el){ $('askIn').value = el.textContent.trim(); askSend(new Event('x')); }
+function esc(t){ return t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function md(t){ return esc(t)
+  .replace(/`([^`]+)`/g,'<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>'); }
+async function askSend(e){
+  if(e&&e.preventDefault) e.preventDefault();
+  const inp=$('askIn'), q=inp.value.trim(); if(!q) return;
+  inp.value=''; $('askGo').disabled=true;
+  const log=$('askLog');
+  log.insertAdjacentHTML('beforeend','<div class="msg q">'+esc(q)+'</div>');
+  const t=document.createElement('div'); t.className='msg thinking';
+  t.textContent='reading the bench…'; log.appendChild(t); log.scrollTop=log.scrollHeight;
+  try{
+    const r=await fetch('ask',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q})});
+    const d=await r.json(); t.remove();
+    if(d.error){
+      log.insertAdjacentHTML('beforeend','<div class="msg err">'+esc(d.error)+'</div>');
+    }else{
+      const look=(d.lookups&&d.lookups.length)
+        ? '<div class="look">checked: '+esc(d.lookups.join(' · '))+'</div>' : '';
+      log.insertAdjacentHTML('beforeend','<div class="msg a">'+md(d.answer||'(no answer)')+look+'</div>');
+    }
+  }catch(err){ t.remove();
+    log.insertAdjacentHTML('beforeend','<div class="msg err">'+esc(String(err))+'</div>'); }
+  $('askGo').disabled=false; log.scrollTop=log.scrollHeight; inp.focus();
+}
+fetch('brain').then(r=>r.json()).then(b=>{
+  $('askBrain').innerHTML = b.ok ? esc(b.label)+'<br>'+esc(b.detail||'') : esc(b.label);
+  $('askDot').className='bd'+(b.ok?' on':'');
+}).catch(()=>{});
+addEventListener('keydown',e=>{ if(e.key==='Escape') askOpen(0); });
+
+tick(); setInterval(tick,1500);
+</script>

@@ -1,0 +1,15 @@
+# Keeps the Python packages and the pinned GitHub Actions up to date.
+# The Prometheus image pin (PROM_IMAGE in run.sh) is not covered; update it by hand.
+# The switch image is not pinned: run.sh downloads it from SONiC on the first run (ADR-0011).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

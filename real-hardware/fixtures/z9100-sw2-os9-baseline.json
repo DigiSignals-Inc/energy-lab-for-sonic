@@ -1,0 +1,23 @@
+{
+  "_comment": "Switch #2 (service tag SERIAL-A) idle baseline under factory Dell OS9 9.14(2.24), captured 2026-08-20 immediately before the SONiC install (from OS9 'show system brief' / 'show inventory'). Companion to z9100-os9-baseline.json (switch #1, SERIAL-B).",
+  "service_tag": "SERIAL-A",
+  "express_service_code": "EXPRESS-CODE-A",
+  "part_number": "0T5W4N",
+  "revision": "A03",
+  "stack_mac": "00:00:5e:00:53:02",
+  "mgmt_mac": "00:00:5e:00:53:03",
+  "system_type": "Z9100-ON",
+  "os": "Dell OS9 9.14(2.24)",
+  "captured": "2026-08-20",
+  "state": "idle, factory OS9, no optics",
+  "power_watts": { "psu1": 70, "psu2": 82, "total": 152,
+    "_note": "OS9 'show system brief' AvgPower per PSU; total 152 W is close to switch #1's 143-146.7 W idle." },
+  "fans_rpm": {
+    "tray1": [8313, 8777], "tray2": [8366, 8566], "tray3": [8511, 8548],
+    "tray4": [8492, 8604], "tray5": [8492, 8680],
+    "psu1_fan": 9168, "psu2_fan": 9136,
+    "_note": "Runs a bit faster than switch #1 under OS9 (~6100-6460 was #1's; #2 ~8300-8780). Ambient or fan-policy difference; will recheck under SONiC."
+  },
+  "psu_model": "0R17R1 (Z9100-ON-PWR-AC-R)",
+  "fan_model": "0X3WCP (Z9100-ON-FAN-R, 5 trays)"
+}

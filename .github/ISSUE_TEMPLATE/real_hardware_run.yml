@@ -1,0 +1,97 @@
+name: Run my test on your real switches
+description: Ask us to run a test on our real SONiC switches and post the results here.
+title: "Bench run: "
+labels: ["real-hardware", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Our bench: two Dell Z9100-ON switches (Broadcom Tomahawk) running community SONiC 202505,
+        and two traffic PCs, one sending at 100G and one receiving at 25G. That 4:1 mismatch gives
+        one switch port that really congests. The switches report power supply output,
+        temperatures, fans, port and queue counters, PFC and ECN.
+
+        How it works:
+        - **We run the commands.** We don't give bench logins to people outside the team.
+        - **We read every script before we run it**, and we don't run binaries or code we can't review.
+        - **We run bench tests on our scheduled lab days**, so it can take several weeks, and we
+          can't promise a date.
+        - **Results are public.** We post them on this issue, labeled as measured on our bench,
+          with the date, the switch and the SONiC version.
+        - We may adjust or decline a test that could harm the switches, or that the bench can't do.
+
+        Please don't post passwords, keys, tokens, IP addresses or hostnames here.
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to find out?
+      description: The question the run should answer.
+      placeholder: "How much does the power supply output change between idle and a congested port?"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What should we run?
+      description: |
+        The commands or script, step by step. Link to code in this repo or another public repo
+        rather than pasting a large script.
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: traffic
+    attributes:
+      label: Traffic during the run
+      options:
+        - None (idle switches)
+        - Steady traffic with no congestion
+        - Congestion at the 4:1 port (PFC and ECN active)
+        - Lossy flood (UDP, the switch drops packets)
+        - Bursty, on and off
+        - My own traffic pattern (describe it above)
+    validations:
+      required: true
+  - type: checkboxes
+    id: collect
+    attributes:
+      label: What should we record?
+      options:
+        - label: Power supply output
+        - label: Temperatures
+        - label: Fan speeds
+        - label: Port counters (traffic, drops)
+        - label: Queue counters and watermarks
+        - label: PFC pause frames
+        - label: ECN marks
+        - label: Something else (say below)
+  - type: input
+    id: duration
+    attributes:
+      label: How long should it run?
+      placeholder: "10 minutes idle, then 10 minutes congested"
+  - type: dropdown
+    id: changes
+    attributes:
+      label: Does the test change the switches?
+      options:
+        - No, it only reads
+        - Yes, it changes configuration and puts it back afterwards
+        - Yes, it needs a reboot, a different SONiC image or a new package
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else we should know?
+      description: Expected results, related issues or upstream SONiC discussions, any deadline.
+  - type: checkboxes
+    id: agree
+    attributes:
+      label: Before you submit
+      options:
+        - label: I understand that the results will be posted publicly on this issue.
+          required: true
+        - label: Any code I link to can be used under the Apache License 2.0, or is already public under a compatible license.
+          required: true
