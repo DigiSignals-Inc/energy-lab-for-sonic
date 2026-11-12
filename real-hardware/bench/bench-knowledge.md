@@ -64,7 +64,7 @@ power, all 8 temperatures and all 12 fans. **Get is proven; Subscribe is not.** 
 
 ## The five traffic modes the buttons drive
 
-1. **Healthy baseline** — one RoCE flow, software-paced to 12G (`ib_write_bw --rate_limit=12
+1. **Light load** (earlier called "Healthy baseline") — one RoCE flow, software-paced to 12G (`ib_write_bw --rate_limit=12
    --rate_limit_type=SW`, port 18515). Offered ≈ delivered, zero drops — **but NOT quiet.**
    See "Why the baseline still pauses" below before answering any question about it.
 2. **Inject congestion** — baseline plus a full-rate aggressor on port 18516. Demand exceeds
@@ -131,7 +131,7 @@ evidence on the bench, and it is a measurement rather than an argument.
 |---|---|---|---|---|---|
 | lossy UDP | 67.9 G | 29.2 G | **682,208/s** | — | — |
 | lossless RoCE, 1 flow | 21.9 G | 21.9 G | 0 | — | — |
-| healthy baseline | ~12.5 G avg | ~12.5 G avg | 0 | **7,223–14,420/s** | **19,947–39,309/s** |
+| light load (baseline) | ~12.5 G avg | ~12.5 G avg | 0 | **7,223–14,420/s** | **19,947–39,309/s** |
 | inject congestion | 26.2–27.3 G | 24.0–27.3 G | **0** | 48,704–86,711/s | 164,988–179,920/s |
 | bursty | pulses | pulses | 0 | 16,106→50,888→**0** | 0→85,197→**0** |
 
